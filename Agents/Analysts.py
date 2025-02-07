@@ -1,23 +1,47 @@
 import os
 from dotenv import load_dotenv
-from crewai import Agent, Task, Crew, LLM
-from langchain_chroma import Chroma  # Updated import
-from langchain_ollama import OllamaEmbeddings
+from crewai import Agent, Task, Crew
+from langchain_chroma import Chroma
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from langchain_openai import ChatOpenAI
+import litellm
 
+load_dotenv()
 
-llm = LLM(
-    model="ollama/llama3.2",
-    base_url="http://localhost:11434"
+os.environ["OPENAI_API_KEY"] = os.getenv("GOOGLE_API_KEY")
+litellm.api_key = os.getenv("GOOGLE_API_KEY")
+
+# Initialize the model using litellm wrapped in ChatOpenAI
+llm = ChatOpenAI(
+    model_name="gemini/gemini-pro",  # Note the provider prefix
+    temperature=0.5,
+    openai_api_key=os.getenv("GOOGLE_API_KEY"),
+    max_tokens=1000
 )
+
+class CustomOutputParser:
+    def parse(self, output):
+        if isinstance(output, dict):
+            if 'raw' in output:
+                return output['raw']
+            elif 'tasks_output' in output:
+                return "\n\n".join(task.raw for task in output['tasks_output'] if hasattr(task, 'raw'))
+        return str(output)
 
 class CompetitorInsightWorkflow:
     def __init__(self):
         """
         Initialize workflow with ChromaDB access
         """
-        self.embeddings = OllamaEmbeddings(model="llama3.2")
+        google_api_key = os.getenv("GOOGLE_API_KEY")
+        if not google_api_key:
+            raise ValueError("GOOGLE_API_KEY not found in environment variables")
+            
+        self.embeddings = GoogleGenerativeAIEmbeddings(
+            model="models/embedding-001",
+            google_api_key=google_api_key
+        )
         
-        # Updated Chroma initialization
         self.vectorstore = Chroma(
             persist_directory="./chroma_db", 
             embedding_function=self.embeddings,
@@ -25,9 +49,6 @@ class CompetitorInsightWorkflow:
         )
     
     def retrieve_context(self, query, top_k=5):
-        """
-        Retrieve context from vectorstore based on query
-        """
         try:
             results = self.vectorstore.similarity_search(query, k=top_k)
             return "\n\n".join([
@@ -39,10 +60,6 @@ class CompetitorInsightWorkflow:
             return ""
     
     def create_agents(self):
-        """
-        Create specialized agents for competitor analysis
-        """
-        # Market Research Agent
         market_research_agent = Agent(
             role="Competitor Market Research Specialist",
             goal="Analyze the competitor's market positioning and product strategy",
@@ -52,7 +69,6 @@ class CompetitorInsightWorkflow:
             llm=llm
         )
         
-        # Product Analysis Agent
         product_analysis_agent = Agent(
             role="Product Strategy Analyst",
             goal="Conduct in-depth analysis of competitor's product offerings and pricing",
@@ -61,17 +77,12 @@ class CompetitorInsightWorkflow:
             allow_delegation=False,
             llm=llm
         )
-
         
         return market_research_agent, product_analysis_agent
     
     def create_tasks(self, agents, context):
-        """
-        Create tasks for each agent based on retrieved context
-        """
         market_research_agent, product_analysis_agent = agents
         
-        # Market Positioning Task
         market_positioning_task = Task(
             description=f"""
             Analyze the competitor's market positioning based on the following context:
@@ -87,7 +98,6 @@ class CompetitorInsightWorkflow:
             expected_output="Detailed market positioning analysis report"
         )
         
-        # Product Analysis Task
         product_analysis_task = Task(
             description=f"""
             Conduct a detailed analysis of the competitor's product offerings using:
@@ -97,52 +107,33 @@ class CompetitorInsightWorkflow:
             1. Product range and categories
             2. Key product features
             3. Pricing structure
-            4. Potential gaps in their product lineup
             """,
             agent=product_analysis_agent,
             expected_output="Comprehensive product strategy analysis"
         )
         
-        # Trend Prediction Task
-
-        
         return [market_positioning_task, product_analysis_task]
     
     def run_analysis(self, query="Competitor e-commerce strategy"):
-        """
-        Run the complete competitor analysis workflow
-        """
-        # Retrieve context
         context = self.retrieve_context(query)
-        
-        # Create agents
         agents = self.create_agents()
-        
-        # Create tasks
         tasks = self.create_tasks(agents, context)
         
-        # Create and run crew (Fixed verbose parameter)
         crew = Crew(
             agents=agents,
             tasks=tasks,
-            verbose=True  # Changed from 2 to True
+            verbose=True,
+            output_parser=CustomOutputParser()  # Add custom output parser
         )
         
-        # Execute the workflow
         result = crew.kickoff()
-        
         return result
 
 def main():
-    # Initialize and run workflow
     workflow = CompetitorInsightWorkflow()
-    
-    # You can modify the query to focus on specific aspects
     analysis_results = workflow.run_analysis(
         query="Best sellers collection product details"
     )
-    
-    # Print or further process results
     print(analysis_results)
 
 if __name__ == "__main__":
