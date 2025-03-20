@@ -1,0 +1,13 @@
+chromadb
+crewai
+dotenv
+firecrawl
+google-generativeai
+langchain
+langchain-community
+langchain-chroma
+langchain-google-genai
+langchain-openai
+litellm
+python-dotenv
+streamlit
