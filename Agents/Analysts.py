@@ -1,22 +1,17 @@
 import os
 from dotenv import load_dotenv
-from crewai import Agent, Task, Crew
+from crewai import Agent, Task, Crew, LLM
 from langchain_chroma import Chroma
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
-from langchain_openai import ChatOpenAI
-import litellm
 
 load_dotenv()
 
-os.environ["OPENAI_API_KEY"] = os.getenv("GOOGLE_API_KEY")
-litellm.api_key = os.getenv("GOOGLE_API_KEY")
+os.environ["GEMINI_API_KEY"] = os.getenv("GEMINI_API_KEY")
+
 
 # Initialize the model using litellm wrapped in ChatOpenAI
-llm = ChatOpenAI(
-    model_name="gemini/gemini-pro",  # Note the provider prefix
-    temperature=0.5,
-    openai_api_key=os.getenv("GOOGLE_API_KEY"),
-    max_tokens=1000
+llm = LLM(
+    model="gemini/gemini-2.0-flash"
 )
 
 class CustomOutputParser:
