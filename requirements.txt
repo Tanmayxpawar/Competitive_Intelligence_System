@@ -1,4 +1,4 @@
-chromadb
+chromadb==0.6.3
 crewai
 dotenv
 firecrawl
